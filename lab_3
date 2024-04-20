@@ -1,0 +1,41 @@
+"""
+Temperature with boundary conditions of the 1st kind
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import cmap as cm
+
+x0 = 0
+xe = 8
+
+Nx = 9
+x = np.linspace(0, 8, 9)
+
+y0 = 0
+ye = 6
+
+Ny = 7
+y = np.linspace(y0, ye, Ny)
+
+X, Y = np.meshgrid(x, y, indexing='ij')
+
+T0 = 0
+
+T = np.ones_like(X) * T0
+
+T1 = 100
+T2 = 200
+T3 = 300
+T4 = 400
+
+T[:, -1] = T1
+T[-1, :] = T2
+T[:, 0] = T3
+T[0, :] = T4
+
+fig = plt.figure()
+ax = fig.add_subplot(projection='3d')
+ax.plot_surface(X, Y, T, cmap = cm.jet, edgecolor='k', lw=0.5)
+ax.set(xlabel='x', ylabel='y', zlabel='T')
+plt.show()
