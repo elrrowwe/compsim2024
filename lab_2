@@ -1,0 +1,66 @@
+import numpy as np
+from scipy.linalg import solve
+import matplotlib.pyplot as plt
+
+x0 = 0
+xe = 2
+
+Nx = 200
+x = np.linspace(x0, xe, Nx)
+dx = x[1] - x[0]
+
+y0 = 1
+ye = 2
+
+
+def fas(x):
+    return -np.sqrt(5) * x / 6 + np.sqrt(1 + x**2) / 3 + (2 + x**2) / 3
+
+
+def fU(x):
+    return 2 * (1 + x**2) + x * dx
+
+
+def fM(x):
+    return -(4 * (1 + x**2) + 2 * dx**2)
+
+
+def fL(x):
+    return 2*(1 + x**2) - x * dx
+
+
+def fRHS(x):
+    return 2 * x**2 * dx**2
+
+ 
+A = np.diag(fM(x[1:-1])) + np.diag(fU(x[1:-2]), 1) + np.diag(fL(x[2:-1]), -1)
+
+b = fRHS(x[1:-1])
+
+b[0] -= fL(x[1]) * y0
+b[-1] -= fU(x[-2]) * ye
+
+y = solve(A, b)
+y = np.hstack((y0, y, ye))
+
+Nxp = 200
+xp = np.linspace(x0, xe, Nxp)
+yp = fas(xp)
+
+fig = plt.figure()
+ax = fig.add_subplot()
+ax.plot(xp, yp)
+ax.plot(x, y)
+
+ax.set(xlabel='x', ylabel='y')
+ax.legend()
+
+err = y - fas(x)
+rerr = err/fas(x)
+
+fig1 = plt.figure()
+ax1 = fig.add_subplot()
+ax1.plot(x, err)
+
+ax1.set(xlabel='x', ylabel='y')
+ax1.legend()
