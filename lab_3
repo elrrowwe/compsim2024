@@ -4,18 +4,18 @@ Temperature with boundary conditions of the 1st kind
 
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib import cmap as cm
+from matplotlib import cm
 
 x0 = 0
 xe = 8
 
-Nx = 9
+Nx = 801  #9
 x = np.linspace(0, 8, 9)
 
 y0 = 0
 ye = 6
 
-Ny = 7
+Ny = 601  #7
 y = np.linspace(y0, ye, Ny)
 
 X, Y = np.meshgrid(x, y, indexing='ij')
@@ -34,8 +34,35 @@ T[-1, :] = T2
 T[:, 0] = T3
 T[0, :] = T4
 
-fig = plt.figure()
-ax = fig.add_subplot(projection='3d')
-ax.plot_surface(X, Y, T, cmap = cm.jet, edgecolor='k', lw=0.5)
-ax.set(xlabel='x', ylabel='y', zlabel='T')
-plt.show()
+
+def plotT(T, tyt):
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+    ax.plot_surface(X, Y, T, edgecolor='k', cmap=cm.jet, lw=0.5)
+    ax.set(xlabel='x', ylabel='y', zlabel='T')
+    plt.show()
+   
+   
+   
+   
+
+
+def step1(T):
+    T[1: -1, 1: -1] = (T[:-2, 1: -1] + T[2:, 1: -1] + T[1: -1, 2:] + T[1: -1, :-2]) / 4
+   
+    return T
+
+def step2(TT):
+    T = TT.copy()
+   
+    TT = (np.roll(T, 1, axis=0) + np.roll(T, -1, axis=0) + np.roll(T, 1, axis=1) + np.roll(T, -1, axis=1)) / 4
+   
+    TT[:, -1] = T1
+    TT[-1, :] = T2
+    TT[:, 0] = T3
+    TT[0, :] = T4
+
+   
+    return TT
+
+print(step1(T))
