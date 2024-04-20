@@ -1,0 +1,84 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import cm
+
+plt.close('all')
+np.set_printoptions(precision = 3)
+
+x0 = 0
+xe = 8
+Nx = 81
+x = np.linspace(x0,xe,Nx)
+dx = x[1] - x[0]
+
+y0 = 0
+ye = 6
+Ny = 61
+y = np.linspace(y0,ye,Ny)
+dy = y[1] - y[0]
+
+assert dx-dy > -12, f'The values of dx {dx} and dy {dy} are different.'
+
+# if abs(dx - dy) > -12:
+    # print('')
+
+X,Y = np.meshgrid(x,y,indexing='ij')
+
+# initial temperatures
+T0 = 250
+
+#
+kL = 10
+A1 = kL / dx
+A1d = 1 / (1 + A1)
+
+A2 = kL / dx / 2
+A2d = 1 / (1 + A2 * 3)
+
+# matrix of temperatures
+T = np.ones_like(X) * T0
+
+T1 = 100    # top
+T2 = 200    # right
+T3 = 300    # bottom
+T4 = 400    # left
+
+
+def boundary_condition2_1(T):
+    T[ :,-1] = (A1 * T[:, -2] + T1) * A1d
+    T[-1, :] = (A1 * T[-2, :] + T2) * A1d
+    T[ :, 0] = (A1 * T[:, 1] + T3) * A1d
+    T[ 0, :] = (A1 * T[1,:] + T4) * A1d
+    T[0, 0] = (T[0, 1] + T[1, 0]) / 2
+    T[0, -1] = (T[1, -1] + T[0, -2]) / 2
+    T[-1, 0] = (T[-2, 0] + T[-1, 1]) / 2
+    T[-1 ,-1] = (T[-1, -2] + T[-2, -1]) / 2
+   
+
+def plotT(T, tyt='T plot'):
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+    ax.plot_surface(X, Y, T, cmap=cm.jet, edgecolor='k', lw = 0.5)
+    ax.set(xlabel = 'x', ylabel = 'y', zlabel = 'T', title = tyt)
+    ax.view_init(azim = 55, elev = 20)
+
+
+def step1(T):
+    T[1:-1,1:-1] = ( T[:-2,1:-1] + T[ 2:,1:-1] + T[1:-1,2:] + T[1:-1,:-2]) / 4
+   
+    boundary_condition2_1(T)
+   
+maxinc = 1e-9   # condition of success
+maxstps = int(1e5)
+maxT = 10 * (np.max([T1, T2, T3, T4]))
+more = True
+count = 0
+while more:
+    count +=1
+    Tr = T.copy()
+    step1(T)
+    inc = np.max(np.abs(T-Tr))
+    if inc < maxinc:
+        more = False
+tyt = "T after step {}\n(Nx = {}, Ny = {}, cond = {:.1e}, last inc = {:.3e}".format(count, Nx, Ny, maxinc, inc)
+plotT(T, tyt)
