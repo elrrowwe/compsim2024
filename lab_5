@@ -1,0 +1,225 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import cm
+import time
+from scipy.interpolate import bisplrep, bisplev
+
+plt.close('all')
+np.set_printoptions(precision = 3)
+
+bc = '2nd2'
+
+x0 = 0
+xe = 8
+
+y0 = 0
+ye = 6
+
+Nxr = 9     # number of points in rare grid
+xr = np.linspace(x0,xe,Nxr)
+dxr = xr[1]-xr[0]
+Nyr = 7     # number of points in rare grid
+yr = np.linspace(y0,ye,Nyr)
+dyr = xr[1]-xr[0]
+Xr,Yr = np.meshgrid(xr,yr,indexing='ij')
+if abs(dxr-dyr)>1e-12:
+    print('ATTENTION!!!\nvalues of dx ({}) and dy ({}) are DIFFERENT\n difference dx - dy = {})').format(dxr,dyr,dxr-dyr)
+
+Nxf = 81    # number of points in the final grid
+xf = np.linspace(x0,xe,Nxf)
+dxf = xf[1]-xf[0]
+Nyf = 61    # number of points in the final grid
+yf = np.linspace(y0,ye,Nyf)
+dyf = xf[1]-xf[0]
+Xf,Yf = np.meshgrid(xf,yf,indexing='ij')
+
+if abs(dxf-dyf)>1e-12:
+    print('ATTENTION!!!\nvalues of dx ({}) and dy ({}) are DIFFERENT\n difference dx - dy = {})').format(dxf,dyf,dxf-dyf)
+
+
+
+kL = 0.1  #small -> easy to exchange energy with environment but hard within the material, big -> easy to exchange within material, hard to exchange with environment
+
+# function returning parameters 'A'
+def parA(dx):
+    # parameter 'A' for boundary condition, lower precision
+    A1 = kL/dx
+    A1d = 1/(1+A1)
+    # parameter 'A' for boundary condition, higher precision
+    A2 = kL/dx/2
+    A24 = 4*A2
+    A2d = 1/(1+3*A2)
+    return A1, A1d, A2, A24, A2d
+
+A1, A1d, A2, A24, A2d = parA(dxr)
+
+# initial temperatures
+T0 = 250
+
+# matrix of temperatures
+Tr = np.ones_like(Xr)*T0
+
+# boundary ambient temperatures at the boundaries
+T1 = 100    # top
+T2 = 200    # right
+T3 = 300    # bottom
+T4 = 400    # left
+
+def plotT(T,X,Y, tyt):
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+    ax.plot_surface(X, Y, T, cmap=cm.jet, edgecolor='k', lw = 0.5)
+    ax.set(xlabel = 'x', ylabel = 'y', zlabel = 'T', title = tyt)
+    ax.view_init(azim = 55, elev = 20)
+
+
+if bc == '2nd2':
+    def fbc(T):
+        T[ :,-1] = (4*A2*T[:,-2] - A2*T[:,-3] + T1)*A2d
+        T[-1, :] = (4*A2*T[-2,:] - A2*T[-3,:] + T2)*A2d
+        T[ :, 0] = (4*A2*T[:,1] - A2*T[:,2] + T3)*A2d
+        T[ 0, :] = (4*A2*T[1,:] - A2*T[2,:] + T4)*A2d
+       
+        T[0,0] = (T[0,1]+T[1,0])/2
+        T[0,-1] = (T[1,-1]+T[0,-2])/2
+        T[-1,0] = (T[-2,0]+T[-1,1])/2
+        T[-1,-1] = (T[-1,-2]+T[-2,-1])/2
+elif bc == '2nd1':
+    def fbc(T):
+        T[ :,-1] = (A1*T[:,-2]+T1)*A1d
+        T[-1, :] = (A1*T[-2,:]+T2)*A1d
+        T[ :, 0] = (A1*T[:,1]+T3)*A1d
+        T[ 0, :] = (A1*T[1,:]+T4)*A1d
+        # average values on the corners
+        T[0,0] = (T[0,1]+T[1,0])/2
+        T[0,-1] = (T[1,-1]+T[0,-2])/2
+        T[-1,0] = (T[-2,0]+T[-1,1])/2
+        T[-1,-1] = (T[-1,-2]+T[-2,-1])/2
+elif bc == '1st':
+    def fbc(T):
+        T[:,-1] = T1
+        T[-1,:] = T2
+        T[:,0] = T3
+        T[0,:] = T4
+       
+def step1(T):
+    T[1:-1,1:-1] = ( T[:-2,1:-1] + T[ 2:,1:-1] + T[1:-1,2:] + T[1:-1,:-2]) / 4
+    fbc(T)
+   
+maxinc = 1e-6   # condition of success
+maxsteps = int(1e5)
+maxT = 10*(np.max([T1,T2,T3,T4]))
+more = True
+count = 0
+t0 = time.perf_counter()
+while more:
+    count +=1
+    Tref  = Tr.copy()
+    step1(Tr)
+    inc = np.max(np.abs(Tr-Tref))
+    if inc < maxinc or count >= maxsteps or np.max(Tr) > maxT:
+        more = False
+te = time.perf_counter()
+dt = te - t0
+tyt = "T on rare grid after step {} (t = {:.5f}) with kL = {}\n(Nx = {}, Ny = {}, cond = {:.1e},\nb.c. = {}, last inc = {:.3e})".format(count, dt, kL, Nxr, Nyr, maxinc, bc, inc)
+plotT(Tr,Xr,Yr, tyt)
+
+# interpolation from rare grid onto fine grid
+
+tmp = bisplrep(Xr,Yr,Tr, s = 100)
+Ti = bisplev(xf,yf,tmp)
+tyt = "T on final grid interpolated onto rare grid after step {} (t = {:.5f}) with kL = {}\n(Nxr = {}, Nyr = {} --> Nxf = {}, Nyf = {})".format(count, dt, kL, Nxr, Nyr, Nxf, Nyf)
+plotT(Ti,Xf,Yf, tyt)
+
+# computation on fnal grid
+
+Tf = Ti.copy()
+
+more = True
+count = 0
+t0 = time.perf_counter()
+while more:
+    count +=1
+    Tref  = Tf.copy()
+    step1(Tf)
+    inc = np.max(np.abs(Tf-Tref))
+    if inc < maxinc or count >= maxsteps or np.max(Tf) > maxT:
+        more = False
+te = time.perf_counter()
+dt = te - t0
+
+tyt = "T on final grid after step {} (t = {:.5f}) with kL = {}\n(Nxf = {}, Nyf = {}, cond = {:.1e},\nb.c. = {}, last inc = {:.3e})".format(count, dt, kL, Nxf, Nyf, maxinc, bc, inc)
+plotT(Tf,Xf,Yf, tyt)
+
+def Gt(xg0, xgn, yg0, ygn, dx, dy, ax):
+    i0 = 30
+    ie = 60
+    j0 = 10
+    je = 30
+
+    i0 = round(xg0/dx)
+    ie = round(xge/dx)
+    j0 = round(yg0/dy)
+    je = round(yge/dy)
+
+    ax2.plot(x[[i0,i0,ie,ie,i0]], y[[j0,je,je,j0,j0]],'-k',lw=0.5)
+
+    Ls = gx[i0,j0:je+1]*dx
+    Ls[0] /= 2; Ls[-1] /= 2; Ls = np.sum(Ls)
+    Rs = gx[ie,j0:je+1]*dx
+    Rs[0] /= 2; Rs[-1] /= 2; Rs = np.sum(Rs)
+    Bs = gy[i0:ie+1,j0]*dx
+    Bs[0] /= 2; Bs[-1] /= 2; Bs = np.sum(Bs)
+    Ts = gy[i0:ie+1,je]*dx
+    Ts[0] /= 2; Ts[-1] /= 2; Ts = np.sum(Ts)
+   
+    THF = Ls + Bs - Rs - Ts
+    ax2.text(x[i0],y[j0],"{:.3e}".format(THF))
+   
+    return THF
+
+Gt(4.7, 3.5, 4.5, dxf, dyf, yf, ax2)
+
+# lg = np.sqrt(gx**2+gy**2)
+# maxgl = 10
+# coeff = lg/maxgl
+# gxs = gx/coeff
+# gys = gy/coeff
+# every = 3
+# ax2.quiver(X[::every,::every], Y[::every,::every], -gxs[::every,::every], -gys[::every,::every], lg[::every,::every], cmap = cm.jet)
+# tyt2 = "Heat flow after step {} with kL = {}, every {} arrow\n(Nx = {}, Ny = {}, cond = {:.1e},\nb.c. = {}, last inc = {:.3e})".format(count, kL, every, Nx, Ny, maxinc, bc, inc)
+# ax2.set(xlabel = 'x', ylabel = 'y', title = tyt2)
+# cnt = ax2.contour(X,Y,T,10,linewidths=0.5)
+# plt.clabel(cnt,fmt = '%d')
+# ax2.axis('scaled')
+
+# # 'Gauss test'
+# # coordinates of Gauss test rectangle (so that when we change the size of the original matrix we attain the rectangle in the same place)
+# xg0 = 4
+# xge = 7
+# yg0 = 3.5
+# yge = 4.5
+
+# # i0 = 30
+# # ie = 60
+# # j0 = 10
+# # je = 30
+
+# i0 = round(xg0/dx)
+# ie = round(xge/dx)
+# j0 = round(yg0/dy)
+# je = round(yge/dy)
+
+# ax2.plot(x[[i0,i0,ie,ie,i0]], y[[j0,je,je,j0,j0]],'-k',lw=0.5)
+
+# Ls = gx[i0,j0:je+1]*dx
+# Ls[0] /= 2; Ls[-1] /= 2; Ls = np.sum(Ls)
+# Rs = gx[ie,j0:je+1]*dx
+# Rs[0] /= 2; Rs[-1] /= 2; Rs = np.sum(Rs)
+# Bs = gy[i0:ie+1,j0]*dx
+# Bs[0] /= 2; Bs[-1] /= 2; Bs = np.sum(Bs)
+# Ts = gy[i0:ie+1,je]*dx
+# Ts[0] /= 2; Ts[-1] /= 2; Ts = np.sum(Ts)
+
+# THF = Ls + Bs - Rs - Ts
+# ax2.text(x[i0],y[j0],"{:.3e}".format(THF))
